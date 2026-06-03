@@ -1,13 +1,25 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { apiUrl } from '../utils/api.js'
 
 const emit = defineEmits(['close', 'login'])
 
 const username = ref('')
 const password = ref('')
+const email = ref('')
 const remember = ref(false)
 const modalRef = ref(null)
 const error = ref('')
+const loading = ref(false)
+const mode = ref('login')
+
+function switchMode(m) {
+  console.log(m)
+  error.value = ''
+  console.log(mode.value )
+  mode.value = m
+  console.log(mode.value )
+}
 
 function onOverlayClick(e) {
   if (modalRef.value && !modalRef.value.contains(e.target)) {
@@ -19,13 +31,32 @@ function onKeydown(e) {
   if (e.key === 'Escape') emit('close')
 }
 
-function handleLogin() {
+async function handleLogin() {
   error.value = ''
-  if (username.value === 'fushitian' && password.value === '197011') {
-    emit('login', { username: username.value, remember: remember.value })
+  loading.value = true
+  try {
+    const isLogin = mode.value === 'login'
+    const url = isLogin ? '/inkpad/login' : '/inkpad/register'
+    const body = { username: username.value, password: password.value }
+    if (!isLogin) body.email = email.value
+
+    const res = await fetch(apiUrl(url), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || (isLogin ? '登录失败' : '注册失败'))
+    }
+    if (isLogin) {
+      emit('login', { username: username.value, remember: remember.value })
+    }
     emit('close')
-  } else {
-    error.value = '用户名或密码错误'
+  } catch (e) {
+    error.value = e.message || (mode.value === 'login' ? '用户名或密码错误' : '注册失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -40,7 +71,7 @@ onUnmounted(() => {
 
 <template>
   <div class="overlay" @click="onOverlayClick">
-    <div ref="modalRef" class="modal">
+    <div ref="modalRef" class="modal" @click.stop>
       <button class="close-btn" @click="emit('close')">&times;</button>
       <h1 class="brand">Inkpad</h1>
       <form class="form" @submit.prevent="handleLogin">
@@ -48,7 +79,7 @@ onUnmounted(() => {
           v-model="username"
           type="text"
           class="input"
-          placeholder="用户名或邮箱"
+          :placeholder="mode === 'login' ? '用户名或邮箱' : '用户名'"
         />
         <input
           v-model="password"
@@ -56,12 +87,28 @@ onUnmounted(() => {
           class="input"
           placeholder="密码"
         />
+        <input
+          v-if="mode === 'register'"
+          v-model="email"
+          type="email"
+          class="input"
+          placeholder="邮箱"
+        />
         <label class="remember">
           <input v-model="remember" type="checkbox" />
           记住我
         </label>
         <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="login-btn">登录</button>
+        <button type="submit" class="login-btn" :disabled="loading">
+          {{ loading ? '提交中...' : (mode === 'login' ? '登录' : '注册') }}
+        </button>
+        <div v-if="mode === 'login'" class="toggle-row">
+          <span class="toggle-link">忘记密码</span>
+          <span class="toggle-link" @click="switchMode('register')">注册</span>
+        </div>
+        <div v-else class="toggle-row" style="justify-content: flex-end;">
+          <span class="toggle-link" @click="switchMode('login')">登录</span>
+        </div>
       </form>
     </div>
   </div>
@@ -172,5 +219,27 @@ onUnmounted(() => {
 
 .login-btn:hover {
   background: #444;
+}
+
+.login-btn:disabled {
+  background: #888;
+  cursor: not-allowed;
+}
+
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+}
+
+.toggle-link {
+  font-size: 13px;
+  color: #95a5a6;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.toggle-link:hover {
+  color: #2aabd2;
 }
 </style>
